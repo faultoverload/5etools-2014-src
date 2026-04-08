@@ -1,0 +1,50 @@
+FROM node:24-bookworm-slim
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+
+RUN npm ci \
+	&& npm install --global http-server
+
+COPY . .
+
+ARG BUILD_SEO=true
+ARG SITE_VERSION=local
+ARG VET_BASE_SITE_URL=http://localhost:8080/
+ARG VET_SEO_IS_SKIP_UA_ETC=true
+
+RUN npm run build \
+	&& if [ "$BUILD_SEO" = "true" ]; then \
+		VET_BASE_SITE_URL="$VET_BASE_SITE_URL" \
+		VET_SEO_IS_SKIP_UA_ETC="$VET_SEO_IS_SKIP_UA_ETC" \
+		npm run build:seo -- "$SITE_VERSION"; \
+	fi \
+	&& rm -rf \
+	.github \
+	node \
+	scss \
+	test \
+	node_modules \
+	.editorconfig \
+	.gitattributes \
+	.gitignore \
+	.npmrc \
+	.prettierrc.js \
+	.stylelintrc.json \
+	API_IMPLEMENTATION.md \
+	CONTRIBUTING.md \
+	Dockerfile \
+	Dockerfile.local \
+	Dockerfile.local.dockerignore \
+	ISSUE_TEMPLATE.md \
+	LICENSE.md \
+	NOTES_AUTOMATION.md \
+	NOTES_FAVICON.md \
+	README.md \
+	package-lock.json \
+	package.json
+
+EXPOSE 80
+
+CMD ["http-server", "-c-1", "--cors", "--port", "80"]
