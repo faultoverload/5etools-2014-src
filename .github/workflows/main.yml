@@ -21,6 +21,8 @@ concurrency:
 
 jobs:
    create-release:
+      permissions:
+         contents: write
       runs-on: ubuntu-latest
       steps:
          - uses: actions/setup-node@v4
@@ -43,6 +45,9 @@ jobs:
                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
    create-image:
+      permissions:
+         contents: read
+         packages: write
       runs-on: ubuntu-latest
       steps:
          - name: Free Disk Space
@@ -98,6 +103,9 @@ jobs:
             run: |
                npm run build:seo -- ${{ github.ref_name }}
 
+         -  name: Log In to Registry
+            run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
          # region See: https://docs.github.com/en/packages/managing-github-packages-using-github-actions-workflows/publishing-and-installing-a-package-with-github-actions#upgrading-a-workflow-that-accesses-ghcrio
          # FIXME `timeout-minutes` due to `sleep` hack
          -  name: Build Image
@@ -116,7 +124,7 @@ jobs:
                      DO_CLEAN_BUILD=1
                   fi
                fi
-               
+
                # FIXME hack to allow the `-img` build action to complete
                sleep 20m
 
@@ -130,8 +138,12 @@ jobs:
                   echo "Version is ${{ github.ref_name }}, doing an incremental docker build"
 
                   # Pull the old images
-                  docker pull $IMAGE_ID_SRC:latest
-                  docker pull $IMAGE_ID_IMG:latest
+                  if ! docker pull $IMAGE_ID_SRC:latest || ! docker pull $IMAGE_ID_IMG:latest
+                  then
+                     echo "Unable to pull previous image layers from GHCR, falling back to a clean docker build"
+                     docker build -t $IMAGE_NAME-src .
+                     exit 0
+                  fi
 
                   # Save the current CMD from the image
                   SAVE_CMD=$(docker inspect --format='{{json .Config.Cmd}}' $IMAGE_ID_SRC:latest)
@@ -150,10 +162,6 @@ jobs:
                   # Commit the changes
                   docker commit -c "CMD $SAVE_CMD" $CONTAINER_ID $IMAGE_NAME-src
                fi
-
-         -  name: Log In to Registry
-            run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
          -  name: Push Image
             run: |
                echo IMAGE_ID_SRC=$IMAGE_ID_SRC
