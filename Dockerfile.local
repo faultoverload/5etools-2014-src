@@ -2,10 +2,10 @@ FROM node:24-bookworm-slim
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 
-RUN npm ci \
-	&& npm install --global http-server
+RUN npm install --force --legacy-peer-deps --no-audit --no-fund \
+	&& npm install --global http-server --no-audit --no-fund
 
 COPY . .
 
